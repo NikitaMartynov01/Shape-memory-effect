@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Эффект памяти формы</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.min.js"></script>
+    <style>
+        body { margin: 0; display: flex; justify-content: center; padding-top: 20px; background: #1a1a2e; }
+    </style>
+</head>
+<body>
+<script>
+// ============================================
+// ЭФФЕКТ ПАМЯТИ ФОРМЫ
+// Визуализация мартенситного превращения
+// ============================================
+
+// --- МАССИВЫ ---
+let atoms = [];
+let bonds = [];
+let startPositions = [];
+
+// --- ПАРАМЕТРЫ ---
+let cols = 10;
+let rows = 6;
+let atomSize = 16;
+let spacing = 55;
+
+// --- ТЕМПЕРАТУРЫ ---
+let Ms = 30;
+let Af = 80;
+
+// --- СОСТОЯНИЕ ---
+let temperature = 100;
+let phase = "аустенит";
+let isDeformed = false;
+
+let slider;
+
+
+function setup() {
+  createCanvas(800, 500);
+  
+  slider = createSlider(-50, 150, 100);
+  slider.position(150, height - 45);
+  slider.style('width', '150px');
+  
+  let btn1 = createButton('Деформировать');
+  btn1.position(380, height - 50);
+  btn1.mousePressed(deform);
+  
+  let btn2 = createButton('Сбросить');
+  btn2.position(500, height - 50);
+  btn2.mousePressed(reset);
+  
+  createLattice();
+}
+
+
+function createLattice() {
+  atoms = [];
+  bonds = [];
+  startPositions = [];
+  
+  let startX = (width - (cols - 1) * spacing) / 2;
+  let startY = (height - 80 - (rows - 1) * spacing) / 2;
+  
+  for (let i = 0; i < rows; i++) {
+    for (let j = 0; j < cols; j++) {
+      let x = startX + j * spacing;
+      let y = startY + i * spacing;
+      
+      atoms.push({
+        x: x,
+        y: y,
+        targetX: x,
+        targetY: y,
+        row: i
+      });
+      
+      startPositions.push({x: x, y: y});
+    }
+  }
+  
+  for (let i = 0; i < atoms.length; i++) {
+    let row = Math.floor(i / cols);
+    let col = i % cols;
+    
+    if (col < cols - 1) {
+      bonds.push({from: i, to: i + 1});
+    }
+    if (row < rows - 1) {
+      bonds.push({from: i, to: i + cols});
+    }
+  }
+  
+  isDeformed = false;
+}
+
+
+function draw() {
+  background(25, 25, 45);
+  
+  temperature = slider.value();
+  
+  if (temperature < Ms) {
+    phase = "мартенсит";
+  } else if (temperature > Af) {
+    phase = "аустенит";
+  } else {
+    phase = "переход";
+  }
+  
+  if (phase === "аустенит" && isDeformed) {
+    restoreShape();
+  }
+  
+  moveAtoms();
+  drawBonds();
+  drawAtoms();
+  drawInterface();
+}
+
+
+function moveAtoms() {
+  for (let i = 0; i < atoms.length; i++) {
+    atoms[i].x = lerp(atoms[i].x, atoms[i].targetX, 0.1);
+    atoms[i].y = lerp(atoms[i].y, atoms[i].targetY, 0.1);
+  }
+}
+
+
+function restoreShape() {
+  for (let i = 0; i < atoms.length; i++) {
+    atoms[i].targetX = startPositions[i].x;
+    atoms[i].targetY = startPositions[i].y;
+  }
+  
+  let done = true;
+  for (let i = 0; i < atoms.length; i++) {
+    let d = dist(atoms[i].x, atoms[i].y, startPositions[i].x, startPositions[i].y);
+    if (d > 2) {
+      done = false;
+      break;
+    }
+  }
+  
+  if (done) {
+    isDeformed = false;
+  }
+}
+
+
+function deform() {
+  if (phase !== "мартенсит") {
+    return;
+  }
+  
+  isDeformed = true;
+  
+  for (let i = 0; i < atoms.length; i++) {
+    let row = atoms[i].row;
+    let shiftX = row * 15 + random(-5, 5);
+    let shiftY = random(-4, 4);
+    
+    atoms[i].targetX = startPositions[i].x + shiftX;
+    atoms[i].targetY = startPositions[i].y + shiftY;
+  }
+}
+
+
+function reset() {
+  temperature = 100;
+  slider.value(100);
+  createLattice();
+}
+
+
+function drawBonds() {
+  for (let i = 0; i < bonds.length; i++) {
+    let a = atoms[bonds[i].from];
+    let b = atoms[bonds[i].to];
+    
+    let len = dist(a.x, a.y, b.x, b.y);
+    let diff = abs(len - spacing);
+    
+    if (diff > 5) {
+      stroke(255, 100, 100);
+      strokeWeight(2);
+    } else {
+      stroke(255, 255, 255, 100);
+      strokeWeight(1);
+    }
+    
+    line(a.x, a.y, b.x, b.y);
+  }
+}
+
+
+function drawAtoms() {
+  for (let i = 0; i < atoms.length; i++) {
+    if (phase === "аустенит") {
+      fill(46, 204, 113);
+    } else if (phase === "мартенсит") {
+      fill(52, 152, 219);
+    } else {
+      fill(241, 196, 15);
+    }
+    
+    noStroke();
+    ellipse(atoms[i].x, atoms[i].y, atomSize, atomSize);
+  }
+}
+
+
+function drawInterface() {
+  // заголовок
+  fill(255);
+  textSize(20);
+  textAlign(LEFT);
+  text("Эффект памяти формы", 20, 30);
+  
+  // температура и фаза
+  textSize(14);
+  fill(255);
+  text("T = " + temperature + "°C", 20, 55);
+  
+  if (phase === "аустенит") {
+    fill(46, 204, 113);
+  } else if (phase === "мартенсит") {
+    fill(52, 152, 219);
+  } else {
+    fill(241, 196, 15);
+  }
+  text("Фаза: " + phase, 110, 55);
+  
+  if (isDeformed) {
+    fill(255, 100, 100);
+    text("● деформирован", 230, 55);
+  }
+  
+  // подписи слайдера
+  fill(150);
+  textSize(12);
+  text("Температура:", 55, height - 35);
+  text("-50°C", 150, height - 25);
+  text("150°C", 280, height - 25);
+  
+  stroke(60);
+  line(0, height - 60, width, height - 60);
+}
+</script>
+</body>
+</html>
